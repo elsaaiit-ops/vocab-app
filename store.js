@@ -13,7 +13,7 @@ const SYNC_INTERVAL_MS = 30_000;
 const DEFAULT_STATE = () => ({
   words: [],
   pendingOps: [],
-  settings: { typoTolerance: true },
+  settings: { typoTolerance: true, practiceBatchSize: 20 },
   lastSyncAt: null,
 });
 

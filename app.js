@@ -427,11 +427,28 @@ function renderMyWords() {
 // =================================================================
 let practiceMode = "card"; // "card" | "spell"
 let practiceQueue = [];
+let practiceTotalDue = 0;        // 「總共 due 幾個字」,顯示用
 let practiceIdx = 0;
 let practiceFlipped = false;
 
+const BATCH_OPTIONS = [
+  { v: 10,  label: "每輪 10 字" },
+  { v: 20,  label: "每輪 20 字" },
+  { v: 50,  label: "每輪 50 字" },
+  { v: 100, label: "每輪 100 字" },
+  { v: 0,   label: "全部 due" },
+];
+
+function getBatchSize() {
+  const n = getSettings().practiceBatchSize;
+  return (typeof n === "number" && n >= 0) ? n : 20;
+}
+
 function buildPracticeQueue() {
-  practiceQueue = sortDue(getWords());
+  const full = sortDue(getWords());
+  practiceTotalDue = full.length;
+  const size = getBatchSize();
+  practiceQueue = size > 0 ? full.slice(0, size) : full;
   practiceIdx = 0;
   practiceFlipped = false;
 }
@@ -447,9 +464,20 @@ function renderPractice() {
       },
     }, label);
 
+  const sizeSelect = h("select", {
+    onchange: (e) => {
+      setSettings({ practiceBatchSize: Number(e.target.value) });
+      buildPracticeQueue();
+      renderPractice();
+    },
+  }, ...BATCH_OPTIONS.map((o) =>
+    h("option", { value: o.v, selected: o.v === getBatchSize() }, o.label)
+  ));
+
   const header = h("div", { class: "btn-row" },
     modeBtn("card", "字卡"),
     modeBtn("spell", "拼寫"),
+    sizeSelect,
     h("button", { class: "btn ghost", onclick: () => { buildPracticeQueue(); renderPractice(); } }, "🔄 重抽")
   );
 
@@ -461,9 +489,13 @@ function renderPractice() {
   }
 
   if (practiceIdx >= practiceQueue.length) {
+    const remaining = Math.max(0, practiceTotalDue - practiceQueue.length);
     mount(header,
       h("div", { class: "card" },
         h("p", {}, `完成 ${practiceQueue.length} 題 🎉`),
+        remaining > 0
+          ? h("p", { class: "muted" }, `今天還有 ${remaining} 個字 due,要繼續嗎?`)
+          : null,
         h("button", { class: "btn", onclick: () => { buildPracticeQueue(); renderPractice(); } }, "再來一輪")
       )
     );
@@ -471,7 +503,10 @@ function renderPractice() {
   }
 
   const w = practiceQueue[practiceIdx];
-  const progress = h("div", { class: "progress" }, `${practiceIdx + 1} / ${practiceQueue.length}`);
+  const totalLabel = practiceTotalDue > practiceQueue.length
+    ? `${practiceIdx + 1} / ${practiceQueue.length}  ·  本輪共 ${practiceQueue.length} / ${practiceTotalDue} due`
+    : `${practiceIdx + 1} / ${practiceQueue.length}`;
+  const progress = h("div", { class: "progress" }, totalLabel);
 
   if (practiceMode === "card") {
     mount(header, progress, renderFlashcard(w));
