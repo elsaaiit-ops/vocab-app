@@ -5,7 +5,7 @@ import {
   addWord, gradeWord, deleteWord, mergeImport,
   sync, getSyncStatus, installSyncTriggers, getSettings, setSettings,
 } from "./store.js";
-import { sortDue, levenshtein, INTERVALS } from "./srs.js";
+import { sortDue, sortWeak, levenshtein, INTERVALS } from "./srs.js";
 import { onAuthStateChange, signIn, signUp, signOut, getUser } from "./supabase.js";
 
 // =================================================================
@@ -425,9 +425,10 @@ function renderMyWords() {
 // =================================================================
 // Practice
 // =================================================================
-let practiceMode = "card"; // "card" | "spell"
+let practiceMode = "card";       // "card" | "spell"
+let practiceSource = "due";      // "due" | "weak"
 let practiceQueue = [];
-let practiceTotalDue = 0;        // 「總共 due 幾個字」,顯示用
+let practiceTotalDue = 0;        // 「總共符合條件的字」,顯示用
 let practiceIdx = 0;
 let practiceFlipped = false;
 
@@ -436,7 +437,12 @@ const BATCH_OPTIONS = [
   { v: 20,  label: "每輪 20 字" },
   { v: 50,  label: "每輪 50 字" },
   { v: 100, label: "每輪 100 字" },
-  { v: 0,   label: "全部 due" },
+  { v: 0,   label: "全部" },
+];
+
+const SOURCE_OPTIONS = [
+  { v: "due",  label: "今天 due" },
+  { v: "weak", label: "我不會的字" },
 ];
 
 function getBatchSize() {
@@ -445,7 +451,8 @@ function getBatchSize() {
 }
 
 function buildPracticeQueue() {
-  const full = sortDue(getWords());
+  const all = getWords();
+  const full = practiceSource === "weak" ? sortWeak(all) : sortDue(all);
   practiceTotalDue = full.length;
   const size = getBatchSize();
   practiceQueue = size > 0 ? full.slice(0, size) : full;
@@ -474,9 +481,20 @@ function renderPractice() {
     h("option", { value: o.v, selected: o.v === getBatchSize() }, o.label)
   ));
 
+  const sourceSelect = h("select", {
+    onchange: (e) => {
+      practiceSource = e.target.value;
+      buildPracticeQueue();
+      renderPractice();
+    },
+  }, ...SOURCE_OPTIONS.map((o) =>
+    h("option", { value: o.v, selected: o.v === practiceSource }, o.label)
+  ));
+
   const header = h("div", { class: "btn-row" },
     modeBtn("card", "字卡"),
     modeBtn("spell", "拼寫"),
+    sourceSelect,
     sizeSelect,
     h("button", { class: "btn ghost", onclick: () => { buildPracticeQueue(); renderPractice(); } }, "🔄 重抽")
   );
@@ -484,18 +502,22 @@ function renderPractice() {
   if (practiceQueue.length === 0) buildPracticeQueue();
 
   if (practiceQueue.length === 0) {
-    mount(header, h("div", { class: "card" }, h("p", {}, "今天沒有要複習的字 🎉")));
+    const empty = practiceSource === "weak"
+      ? "目前還沒有累積到「我不會的字」 — 多練幾次,box 1/2 的或正確率 < 50% 的會被挑出來。"
+      : "今天沒有要複習的字 🎉";
+    mount(header, h("div", { class: "card" }, h("p", {}, empty)));
     return;
   }
 
   if (practiceIdx >= practiceQueue.length) {
     const remaining = Math.max(0, practiceTotalDue - practiceQueue.length);
+    const remainLabel = practiceSource === "weak"
+      ? `「我不會的字」還有 ${remaining} 個沒練,要繼續嗎?`
+      : `今天還有 ${remaining} 個字 due,要繼續嗎?`;
     mount(header,
       h("div", { class: "card" },
         h("p", {}, `完成 ${practiceQueue.length} 題 🎉`),
-        remaining > 0
-          ? h("p", { class: "muted" }, `今天還有 ${remaining} 個字 due,要繼續嗎?`)
-          : null,
+        remaining > 0 ? h("p", { class: "muted" }, remainLabel) : null,
         h("button", { class: "btn", onclick: () => { buildPracticeQueue(); renderPractice(); } }, "再來一輪")
       )
     );
@@ -503,8 +525,9 @@ function renderPractice() {
   }
 
   const w = practiceQueue[practiceIdx];
+  const totalNoun = practiceSource === "weak" ? "不會" : "due";
   const totalLabel = practiceTotalDue > practiceQueue.length
-    ? `${practiceIdx + 1} / ${practiceQueue.length}  ·  本輪共 ${practiceQueue.length} / ${practiceTotalDue} due`
+    ? `${practiceIdx + 1} / ${practiceQueue.length}  ·  本輪共 ${practiceQueue.length} / ${practiceTotalDue} ${totalNoun}`
     : `${practiceIdx + 1} / ${practiceQueue.length}`;
   const progress = h("div", { class: "progress" }, totalLabel);
 

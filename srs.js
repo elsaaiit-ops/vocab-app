@@ -61,6 +61,34 @@ export function sortDue(words, now = Date.now()) {
   return out;
 }
 
+// 「我不會的字」queue。不走 SRS,只挑符合「struggling」訊號的字。
+// 條件(任一成立):
+//   1) box == 1 且 seen >= 1 — 練過至少一次但停在 box 1(答錯回原點 / 從未答對)
+//   2) box == 2 且 seen >= 2 — 剛 promote 但累積資料還不穩
+//   3) seen >= 3 且 correct/seen < 0.5 — 累積正確率低於一半(門檻 3 次,避免單次失誤誤判)
+// 排序:正確率升冪(越爛越前)→ seen 降冪(練越多越前)→ box 升冪
+export function sortWeak(words) {
+  const matching = words.filter((w) => {
+    if (!w || w.deleted) return false;
+    const seen = w.seen ?? 0;
+    if (seen === 0) return false;
+    const acc = (w.correct ?? 0) / seen;
+    const box = w.box ?? 1;
+    if (box === 1 && seen >= 1) return true;
+    if (box === 2 && seen >= 2) return true;
+    if (seen >= 3 && acc < 0.5) return true;
+    return false;
+  });
+  matching.sort((a, b) => {
+    const accA = a.seen ? (a.correct ?? 0) / a.seen : 1;
+    const accB = b.seen ? (b.correct ?? 0) / b.seen : 1;
+    if (accA !== accB) return accA - accB;
+    if ((b.seen ?? 0) !== (a.seen ?? 0)) return (b.seen ?? 0) - (a.seen ?? 0);
+    return (a.box ?? 1) - (b.box ?? 1);
+  });
+  return matching;
+}
+
 // Levenshtein 用在拼寫模式判「差一點點」(≤1)。輸入小,直接 DP。
 export function levenshtein(a, b) {
   a = a.toLowerCase();
