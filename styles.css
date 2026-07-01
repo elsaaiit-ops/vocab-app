@@ -172,6 +172,25 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #2563eb; outline-
 .flashcard .meaning { font-size: 1.2rem; }
 .flashcard .example { font-size: 0.95rem; color: #4b5563; font-style: italic; }
 .flashcard .hint    { font-size: 0.8rem; color: #9ca3af; }
+.flashcard { position: relative; }
+.flashcard .speak-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.speak-btn {
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 4px 10px;
+  min-height: 36px;
+  min-width: 44px;
+  font-size: 1rem;
+  color: #4b5563;
+}
+.speak-btn:hover  { background: #f3f4f6; }
+.speak-btn:active { background: #e5e7eb; }
 .grade-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

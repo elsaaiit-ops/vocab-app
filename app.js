@@ -7,6 +7,15 @@ import {
 } from "./store.js";
 import { sortDue, sortWeak, levenshtein, INTERVALS } from "./srs.js";
 import { onAuthStateChange, signIn, signUp, signOut, getUser } from "./supabase.js";
+import { playWord, stop as stopAudio } from "./audio.js";
+
+function speakButton(w) {
+  return h("button", {
+    class: "speak-btn",
+    title: "播放發音",
+    onclick: (e) => { e.stopPropagation(); playWord(w.word, w.id); },
+  }, "🔊");
+}
 
 // =================================================================
 // DOM helpers
@@ -421,12 +430,15 @@ function renderMyWords() {
           h("div", { class: "w-main" }, w.word + (w.part_of_speech ? `  (${w.part_of_speech})` : "")),
           h("div", { class: "w-meta" }, `${w.meaning || "—"} · box ${w.box} · ${w.correct}/${w.seen} · ${w.source}`)
         ),
-        h("button", {
-          class: "btn ghost",
-          onclick: () => {
-            if (confirm(`刪除「${w.word}」?`)) deleteWord(w.id);
-          },
-        }, "🗑")
+        h("div", { style: "display:flex; gap:4px" },
+          speakButton(w),
+          h("button", {
+            class: "btn ghost",
+            onclick: () => {
+              if (confirm(`刪除「${w.word}」?`)) deleteWord(w.id);
+            },
+          }, "🗑")
+        )
       )
     )
   );
@@ -564,6 +576,7 @@ function renderFlashcard(w) {
   const card = h("div", { class: "flashcard" });
   function paint() {
     card.innerHTML = "";
+    card.appendChild(speakButton(w));
     if (!practiceFlipped) {
       card.appendChild(h("div", { class: "word" }, w.word));
       card.appendChild(h("div", { class: "hint" }, "點卡片翻面"));
@@ -590,21 +603,26 @@ function renderSpelling(w) {
     const ans = (input.value ?? "").trim().toLowerCase();
     const target = (w.word ?? "").trim().toLowerCase();
     if (!ans) return;
+    result.innerHTML = "";
     if (ans === target) {
-      result.textContent = `✓ 答對:${w.word}`;
       result.className = "toast";
-      setTimeout(() => gradeAndAdvance(w.id, true), 600);
+      result.appendChild(document.createTextNode(`✓ 答對:${w.word} `));
+      result.appendChild(speakButton(w));
+      setTimeout(() => gradeAndAdvance(w.id, true), 900);
       return;
     }
     const dist = levenshtein(ans, target);
     if (dist <= 1 && getSettings().typoTolerance) {
-      result.innerHTML = `🟡 差一點點(Levenshtein=1)。正確拼法:<b>${w.word}</b>`;
       result.className = "toast warn";
+      result.appendChild(document.createTextNode("🟡 差一點點(Levenshtein=1)。正確拼法:"));
     } else {
-      result.innerHTML = `✗ 錯了。正確拼法:<b>${w.word}</b>`;
       result.className = "toast error";
+      result.appendChild(document.createTextNode("✗ 錯了。正確拼法:"));
     }
-    setTimeout(() => gradeAndAdvance(w.id, false), 1200);
+    result.appendChild(h("b", {}, w.word));
+    result.appendChild(document.createTextNode(" "));
+    result.appendChild(speakButton(w));
+    setTimeout(() => gradeAndAdvance(w.id, false), 1500);
   }
 
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") judge(); });
