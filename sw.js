@@ -1,6 +1,6 @@
 // Service Worker:app 殼用 cache-first;Supabase / 字典 API 用 network。
 // 改了任何快取資源時要把 CACHE 版本號 +1。
-const CACHE = "vocab-v6";
+const CACHE = "vocab-v7";
 
 const SHELL = [
   "./",

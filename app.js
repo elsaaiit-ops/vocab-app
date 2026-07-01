@@ -5,7 +5,7 @@ import {
   addWord, gradeWord, deleteWord, mergeImport,
   sync, getSyncStatus, installSyncTriggers, getSettings, setSettings,
 } from "./store.js";
-import { sortDue, sortWeak, levenshtein, INTERVALS } from "./srs.js";
+import { sortDue, sortWeak, sortMistakes, levenshtein, INTERVALS } from "./srs.js";
 import { onAuthStateChange, signIn, signUp, signOut, getUser } from "./supabase.js";
 import { playWord, stop as stopAudio } from "./audio.js";
 
@@ -448,8 +448,8 @@ function renderMyWords() {
 // =================================================================
 // Practice
 // =================================================================
-let practiceMode = "card";       // "card" | "spell"
-let practiceSource = "due";      // "due" | "weak"
+let practiceMode = "card";       // "card" | "spell" | "choice"
+let practiceSource = "due";      // "due" | "weak" | "mistakes"
 let practiceQueue = [];
 let practiceTotalDue = 0;        // 「總共符合條件的字」,顯示用
 let practiceIdx = 0;
@@ -464,8 +464,9 @@ const BATCH_OPTIONS = [
 ];
 
 const SOURCE_OPTIONS = [
-  { v: "due",  label: "今天 due" },
-  { v: "weak", label: "我不會的字" },
+  { v: "due",      label: "今天 due" },
+  { v: "weak",     label: "我不會的字" },
+  { v: "mistakes", label: "錯字區" },
 ];
 
 function getBatchSize() {
@@ -475,7 +476,9 @@ function getBatchSize() {
 
 function buildPracticeQueue() {
   const all = getWords();
-  const full = practiceSource === "weak" ? sortWeak(all) : sortDue(all);
+  const full = practiceSource === "mistakes" ? sortMistakes(all)
+             : practiceSource === "weak"     ? sortWeak(all)
+             :                                 sortDue(all);
   practiceTotalDue = full.length;
   const size = getBatchSize();
   practiceQueue = size > 0 ? full.slice(0, size) : full;
@@ -517,6 +520,7 @@ function renderPractice() {
   const header = h("div", { class: "btn-row" },
     modeBtn("card", "字卡"),
     modeBtn("spell", "拼寫"),
+    modeBtn("choice", "選擇題"),
     sourceSelect,
     sizeSelect,
     h("button", { class: "btn ghost", onclick: () => { buildPracticeQueue(); renderPractice(); } }, "🔄 重抽")
@@ -527,6 +531,8 @@ function renderPractice() {
   if (practiceQueue.length === 0) {
     const empty = practiceSource === "weak"
       ? "目前還沒有累積到「我不會的字」 — 多練幾次,box 1/2 的或正確率 < 50% 的會被挑出來。"
+      : practiceSource === "mistakes"
+      ? "錯字區是空的 🎉 練習中答錯就會進來,連續答對 3 次自動離開。"
       : "今天沒有要複習的字 🎉";
     mount(header, h("div", { class: "card" }, h("p", {}, empty)));
     return;
@@ -548,16 +554,23 @@ function renderPractice() {
   }
 
   const w = practiceQueue[practiceIdx];
-  const totalNoun = practiceSource === "weak" ? "不會" : "due";
+  const totalNoun = practiceSource === "weak" ? "不會"
+                 : practiceSource === "mistakes" ? "錯字"
+                 : "due";
   const totalLabel = practiceTotalDue > practiceQueue.length
     ? `${practiceIdx + 1} / ${practiceQueue.length}  ·  本輪共 ${practiceQueue.length} / ${practiceTotalDue} ${totalNoun}`
     : `${practiceIdx + 1} / ${practiceQueue.length}`;
+  const streakLine = (practiceSource === "mistakes" && (w.mistake_streak ?? 0) > 0)
+    ? h("div", { class: "progress" }, `連續答對 ${w.mistake_streak}/3 次`)
+    : null;
   const progress = h("div", { class: "progress" }, totalLabel);
 
   if (practiceMode === "card") {
-    mount(header, progress, renderFlashcard(w));
+    mount(header, progress, streakLine, renderFlashcard(w));
+  } else if (practiceMode === "spell") {
+    mount(header, progress, streakLine, renderSpelling(w));
   } else {
-    mount(header, progress, renderSpelling(w));
+    mount(header, progress, streakLine, renderChoice(w));
   }
 }
 
@@ -593,6 +606,66 @@ function renderFlashcard(w) {
     h("button", { class: "btn yes", onclick: () => gradeAndAdvance(w.id, true)  }, "我會 ✓"),
   );
   return h("div", {}, card, buttons);
+}
+
+function renderChoice(w) {
+  const all = getWords();
+  // 從剩下的字裡隨機挑 3 個當 distractor(排除自己)
+  const pool = all.filter((x) => x.id !== w.id);
+  const distractors = [];
+  for (let i = 0; i < 3 && pool.length; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    distractors.push(pool.splice(idx, 1)[0]);
+  }
+  if (distractors.length < 3) {
+    return h("div", { class: "card" },
+      h("p", {}, `選擇題需要至少 4 個字,目前只有 ${all.length} 個。先去「新增」多加一些字。`)
+    );
+  }
+  // 洗牌選項
+  const opts = [w, ...distractors];
+  for (let i = opts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [opts[i], opts[j]] = [opts[j], opts[i]];
+  }
+  const result = h("div");
+  const btns = [];
+
+  function onPick(opt, btn) {
+    if (btn.disabled) return;
+    const isRight = opt.id === w.id;
+    btns.forEach(({ button, ref }) => {
+      button.disabled = true;
+      if (ref.id === w.id) button.classList.add("correct");
+      else if (ref.id === opt.id) button.classList.add("wrong");
+    });
+    result.innerHTML = "";
+    result.className = isRight ? "toast" : "toast error";
+    result.appendChild(document.createTextNode(
+      isRight ? `✓ 答對:${w.word} ` : `✗ 答錯,正解:${w.word} `
+    ));
+    if (!isRight && w.example) {
+      result.appendChild(h("div", { class: "muted", style: "margin-top:4px" }, w.example));
+    }
+    result.appendChild(document.createTextNode(" "));
+    result.appendChild(speakButton(w));
+    setTimeout(() => gradeAndAdvance(w.id, isRight), isRight ? 900 : 1600);
+  }
+
+  for (const opt of opts) {
+    const btn = h("button", { class: "btn choice-btn" }, opt.word);
+    btn.onclick = () => onPick(opt, btn);
+    btns.push({ button: btn, ref: opt });
+  }
+
+  return h("div", { class: "card" },
+    h("div", { class: "spelling-prompt" },
+      h("div", { class: "meaning" }, w.meaning || "(沒有 meaning)"),
+      w.part_of_speech ? h("div", { class: "pos" }, `(${w.part_of_speech})`) : null,
+    ),
+    h("div", { class: "choice-grid" }, ...btns.map((b) => b.button)),
+    result
+  );
 }
 
 function renderSpelling(w) {

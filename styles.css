@@ -201,6 +201,27 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #2563eb; outline-
 .grade-row .yes { background: #16a34a; }
 .grade-row .no  { background: #ef4444; }
 
+/* === Choice (4 選 1) ========================================== */
+.choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.choice-btn {
+  min-height: 56px;
+  padding: 12px 8px;
+  background: #eef2ff;
+  color: #1e3a8a;
+  border: 1px solid #c7d2fe;
+  font-weight: 600;
+  word-break: break-word;
+}
+.choice-btn:hover  { background: #e0e7ff; }
+.choice-btn:disabled { opacity: 0.9; cursor: default; }
+.choice-btn.correct { background: #16a34a; color: #fff; border-color: #16a34a; }
+.choice-btn.wrong   { background: #ef4444; color: #fff; border-color: #ef4444; }
+
 /* === Spelling ================================================= */
 .spelling-prompt { text-align: center; padding: 18px 8px; }
 .spelling-prompt .meaning { font-size: 1.3rem; margin-bottom: 6px; }

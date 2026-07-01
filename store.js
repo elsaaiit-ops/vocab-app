@@ -110,6 +110,8 @@ export function addWord(partial) {
     last_reviewed: null,
     seen: 0,
     correct: 0,
+    is_mistake: false,
+    mistake_streak: 0,
     deleted: false,
     updated_at: now,
   };

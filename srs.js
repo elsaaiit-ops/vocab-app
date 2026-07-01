@@ -19,13 +19,39 @@ export function gradeCorrect(w) {
   const next = stamp(w);
   next.correct = (w.correct ?? 0) + 1;
   next.box = Math.min((w.box ?? 1) + 1, 5);
+  // 錯字區:在裡面才計 streak;連續 3 次答對就出獄。
+  if (w.is_mistake) {
+    const streak = (w.mistake_streak ?? 0) + 1;
+    if (streak >= 3) {
+      next.is_mistake = false;
+      next.mistake_streak = 0;
+    } else {
+      next.mistake_streak = streak;
+    }
+  }
   return next;
 }
 
 export function gradeWrong(w) {
   const next = stamp(w);
   next.box = 1;
+  next.is_mistake = true;   // 答錯就入獄(即使原本已在裡面)
+  next.mistake_streak = 0;  // 連續 streak 歸零
   return next;
+}
+
+// 錯字區 queue:所有 is_mistake=true 的字。不走 SRS 間隔。
+// 排序:streak 升冪(離「連續 3 次」最遠的先練)→ box 升冪 → last_reviewed 升冪。
+export function sortMistakes(words) {
+  const inJail = words.filter((w) => !w.deleted && w.is_mistake);
+  inJail.sort((a, b) => {
+    const sa = a.mistake_streak ?? 0;
+    const sb = b.mistake_streak ?? 0;
+    if (sa !== sb) return sa - sb;
+    if ((a.box ?? 1) !== (b.box ?? 1)) return (a.box ?? 1) - (b.box ?? 1);
+    return (a.last_reviewed ?? 0) - (b.last_reviewed ?? 0);
+  });
+  return inJail;
 }
 
 // 出題排序:box asc → last_reviewed asc(null 最前)→ 同層 Fisher-Yates 打亂。
