@@ -65,6 +65,17 @@ function renderLogin() {
   highlightTab(null);
   const email = h("input", { type: "email", placeholder: "email", autocomplete: "email" });
   const pwd   = h("input", { type: "password", placeholder: "密碼(至少 6 字)", autocomplete: "current-password" });
+  const pwdToggle = h("button", {
+    type: "button",
+    class: "pwd-toggle",
+    title: "顯示/隱藏密碼",
+    onclick: () => {
+      const showing = pwd.type === "text";
+      pwd.type = showing ? "password" : "text";
+      pwdToggle.textContent = showing ? "👁" : "🙈";
+    },
+  }, "👁");
+  const pwdWrap = h("div", { class: "pwd-wrap" }, pwd, pwdToggle);
   const msg   = h("div", { class: "muted" });
 
   async function go(mode) {
@@ -95,7 +106,7 @@ function renderLogin() {
       h("h2", {}, "登入 / 註冊"),
       h("p", { class: "muted" }, "用 email + 密碼。第一次請點「註冊」,之後同帳號登入即可。"),
       h("div", { class: "form-row" }, h("label", {}, "Email"), email),
-      h("div", { class: "form-row" }, h("label", {}, "密碼"), pwd),
+      h("div", { class: "form-row" }, h("label", {}, "密碼"), pwdWrap),
       h("div", { class: "btn-row" },
         h("button", { class: "btn", onclick: () => go("signin") }, "登入"),
         h("button", { class: "btn secondary", onclick: () => go("signup") }, "註冊"),
